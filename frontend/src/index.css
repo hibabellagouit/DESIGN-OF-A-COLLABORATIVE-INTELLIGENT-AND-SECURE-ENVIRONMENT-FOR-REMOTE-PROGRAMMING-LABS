@@ -1,0 +1,6 @@
+/* Typo de base : le thème global est dans styles/app-theme.css */
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
