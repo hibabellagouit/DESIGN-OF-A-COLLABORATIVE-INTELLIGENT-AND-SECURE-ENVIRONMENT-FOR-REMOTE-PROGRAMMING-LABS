@@ -1,29 +1,26 @@
-import "dotenv/config";
-import express from "express";
-import cors from "cors";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import buildApp from "./app.js";
 import connectDB from "./config/db.js";
-import studentRoutes from "./routes/studentRoutes.js";
-import teacherRoutes from "./routes/teacherRoutes.js";
-import projectRoutes from "./routes/projectRoutes.js";
-import assignmentRoutes from "./routes/assignmentRoutes.js";
+import { ensureSeedAdmin } from "./bootstrap/ensureSeedAdmin.js";
 
-const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, ".env") });
 
-// middleware
-app.use(cors());
-app.use(express.json());
-
-// DB
-connectDB();
-
-// routes
-app.use("/api/students", studentRoutes);
-app.use("/api/teachers", teacherRoutes);
-app.use("/api/projects", projectRoutes);
-app.use("/api/assignments", assignmentRoutes);
-
-// 🔥 TOUJOURS EN DERNIER
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const app = buildApp();
+
+async function start() {
+  await connectDB();
+  await ensureSeedAdmin();
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });

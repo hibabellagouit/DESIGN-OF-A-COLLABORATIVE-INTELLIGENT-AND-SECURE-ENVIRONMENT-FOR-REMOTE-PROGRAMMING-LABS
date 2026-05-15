@@ -15,7 +15,9 @@ const assignmentSchema = new mongoose.Schema({
     type: String,
     default: "en cours"
   },
-  niveau: Number
+  niveau: Number,
+  /** Nom d’équipe / groupe optionnel (saisi par l’enseignant à l’affectation) */
+  groupName: { type: String, default: "" },
 });
 
 export default mongoose.model("Assignment", assignmentSchema);

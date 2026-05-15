@@ -1,6 +1,6 @@
-# Getting Started with Create React App
+# Design-of-a-Collaborative-Intelligent-and-Secure-Environment-for-Remote-Programming-Labs
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This frontend was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts
 

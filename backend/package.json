@@ -1,20 +1,26 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Design of a Collaborative, Intelligent and Secure Environment for Remote Programming Labs",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test ./tests/api.smoke.test.mjs"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.0"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "archiver": "^7.0.1",
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.0",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
     "mongoose": "^9.3.3",
     "multer": "^2.1.1"
   }

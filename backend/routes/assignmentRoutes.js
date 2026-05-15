@@ -7,21 +7,27 @@ import {
   getSelectableProjectsForStudent,
   selectProjectForStudent,
 } from "../controllers/assignmentController.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
 // POST assigner projet
-router.post("/", assignProject);
+router.post("/", requireAuth, requireRole("teacher"), assignProject);
 
 // POST valider
-router.post("/validate", validateAssignment);
+router.post("/validate", requireAuth, requireRole("teacher"), validateAssignment);
 
-router.get("/student/:studentId", getAssignmentsForStudent);
-router.get("/student/:studentId/selectable-projects", getSelectableProjectsForStudent);
-router.post("/student/select-project", selectProjectForStudent);
+router.get("/student/:studentId", requireAuth, requireRole("student"), getAssignmentsForStudent);
+router.get(
+  "/student/:studentId/selectable-projects",
+  requireAuth,
+  requireRole("student"),
+  getSelectableProjectsForStudent
+);
+router.post("/student/select-project", requireAuth, requireRole("student"), selectProjectForStudent);
 
 // 🔥 IMPORTANT : GET pour React
-router.get("/", async (req, res) => {
+router.get("/", requireAuth, requireRole("teacher"), async (req, res) => {
   const assignments = await Assignment.find()
     .populate("project")
     .populate("students");

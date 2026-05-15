@@ -2,9 +2,14 @@ import express from "express";
 import {
   createProject,
   getProjects,
+  getProjectById,
+  getProjectDetailWithGroups,
+  updateProject,
+  deleteProject,
   streamCahierFile,
 } from "../controllers/projectController.js";
 import { uploadCdc } from "../middleware/cdcUpload.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -40,10 +45,30 @@ function uploadSingle(req, res, next) {
   });
 }
 
-router.get("/", getProjects);
+router.get("/", requireAuth, getProjects);
 
-router.get("/:id/cdc", streamCahierFile);
+router.get(
+  "/:id/detail",
+  requireAuth,
+  requireRole("teacher"),
+  getProjectDetailWithGroups
+);
 
-router.post("/", ensureBodyParsed, uploadSingle, createProject);
+router.get("/:id", requireAuth, getProjectById);
+
+router.get("/:id/cdc", requireAuth, streamCahierFile);
+
+router.post("/", requireAuth, requireRole("teacher"), ensureBodyParsed, uploadSingle, createProject);
+
+router.put(
+  "/:id",
+  requireAuth,
+  requireRole("teacher"),
+  ensureBodyParsed,
+  uploadSingle,
+  updateProject
+);
+
+router.delete("/:id", requireAuth, requireRole("teacher"), deleteProject);
 
 export default router;
