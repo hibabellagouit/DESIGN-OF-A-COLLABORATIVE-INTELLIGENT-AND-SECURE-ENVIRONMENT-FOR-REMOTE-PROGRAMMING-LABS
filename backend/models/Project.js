@@ -24,6 +24,12 @@ const projectSchema = new mongoose.Schema({
   cahierFileOriginalName: String,
   cahierFileStoredName: String,
   cahierFileMimeType: String,
+  /** docker-compose.yml (ou .yaml) de référence — environnement Docker pour les tests du projet */
+  composeFileOriginalName: String,
+  composeFileStoredName: String,
+  composeFileMimeType: String,
+  /** Date limite de soumission (optionnel) */
+  submissionDeadline: { type: Date, default: null },
 });
 
 export default mongoose.model("Project", projectSchema);

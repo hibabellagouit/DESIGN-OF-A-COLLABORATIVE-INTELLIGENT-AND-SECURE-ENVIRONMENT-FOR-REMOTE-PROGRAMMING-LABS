@@ -17,6 +17,7 @@ function typeLabel(type) {
     assignment_created: "Affectation",
     assignment_validated: "Validation",
     student_selected_project: "Choix de projet",
+    team_project_selected: "Choix de projet (équipe)",
     submission_received: "Soumission",
     submission_status: "Suivi soumission",
   };

@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import ProjectDetailModal from "../ProjectDetailModal";
 
 const VIEW_W = 1040;
 const VIEW_H = 640;
@@ -75,11 +75,13 @@ function shortTitle(title) {
  * sur l’anneau du niveau du projet et indique jusqu’à quel niveau vous pouvez choisir de nouveaux projets.
  */
 export default function StudentLevelDiagram({ assignments, currentLevel }) {
-  const navigate = useNavigate();
+  const [detailProject, setDetailProject] = useState(null);
   const positioned = useMemo(() => layoutAssignmentsOnRings(assignments), [assignments]);
   const cap = Math.min(5, Math.max(1, Number(currentLevel) || 1));
 
-  const goMesProjets = () => navigate("/student-dashboard/mes-projets");
+  const openProject = (assignment) => {
+    if (assignment?.project) setDetailProject(assignment.project);
+  };
 
   return (
     <div className="diagram-wrap">
@@ -191,11 +193,11 @@ export default function StudentLevelDiagram({ assignments, currentLevel }) {
               transform={`translate(${x},${y})`}
               role="button"
               tabIndex={0}
-              onClick={goMesProjets}
+              onClick={() => openProject(assignment)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  goMesProjets();
+                  openProject(assignment);
                 }
               }}
               style={{ cursor: "pointer" }}
@@ -205,7 +207,7 @@ export default function StudentLevelDiagram({ assignments, currentLevel }) {
                 {title}
                 {"\n"}Niveau du projet : {n}
                 {"\n"}Statut : {assignment.status}
-                {"\n"}Cliquez pour ouvrir « Mes projets ».
+                {"\n"}Cliquez pour voir le détail du projet.
               </title>
               <circle r={r + 2} fill="none" stroke={stroke} strokeOpacity={0.25} strokeWidth={2} />
               <circle r={r} fill={fill} stroke={stroke} strokeWidth={1.7} filter="url(#studentNodeShadow)" />
@@ -268,6 +270,15 @@ export default function StudentLevelDiagram({ assignments, currentLevel }) {
                     {assignment.status}
                   </span>
                 </div>
+                <div className="diagram-item__actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => openProject(assignment)}
+                  >
+                    Voir le détail
+                  </button>
+                </div>
               </article>
             );
           })
@@ -279,6 +290,12 @@ export default function StudentLevelDiagram({ assignments, currentLevel }) {
           </article>
         )}
       </div>
+
+      <ProjectDetailModal
+        project={detailProject}
+        isOpen={Boolean(detailProject)}
+        onClose={() => setDetailProject(null)}
+      />
     </div>
   );
 }

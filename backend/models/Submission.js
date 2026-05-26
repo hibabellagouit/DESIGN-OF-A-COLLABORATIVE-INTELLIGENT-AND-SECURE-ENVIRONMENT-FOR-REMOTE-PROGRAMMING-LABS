@@ -21,6 +21,21 @@ const submissionSchema = new mongoose.Schema(
       default: "en attente",
     },
     note: { type: String, default: "" },
+    /** Notes par critère du barème (id critère → points) */
+    rubricScores: { type: mongoose.Schema.Types.Mixed, default: {} },
+    /** Total calculé sur /20 */
+    gradeTotal: { type: Number, default: null },
+    /** Commentaire libre de l’enseignant (hors barème) */
+    gradeComment: { type: String, default: "" },
+
+    /** Note préliminaire Ollama (non définitive) */
+    aiRubricScores: { type: mongoose.Schema.Types.Mixed, default: {} },
+    aiGradeTotal: { type: Number, default: null },
+    aiGradeComment: { type: String, default: "" },
+    aiGradeSummary: { type: String, default: "" },
+    aiEvaluatedAt: { type: Date, default: null },
+    aiModel: { type: String, default: "" },
+    aiGradeTrace: { type: mongoose.Schema.Types.Mixed, default: null },
 
     /** "file" = dépôt local ; "github" = lien */
     kind: { type: String, enum: ["file", "github"], default: "file" },
@@ -29,6 +44,16 @@ const submissionSchema = new mongoose.Schema(
     /** Dossier `uploads/submissions/bundles/<bundleId>/` — soumissions projet multi-fichiers */
     bundleId: { type: String, default: "" },
     projectFiles: { type: [projectFileSchema], default: [] },
+
+    /** Participation équipe (commits GitHub) — synchronisée automatiquement */
+    githubParticipation: { type: mongoose.Schema.Types.Mixed, default: null },
+    githubParticipationSyncedAt: { type: Date, default: null },
+
+    /** Résultat du test Docker Compose (lancé à la soumission ou manuellement) */
+    sandboxResult: { type: mongoose.Schema.Types.Mixed, default: null },
+    sandboxRanAt: { type: Date, default: null },
+    sandboxOk: { type: Boolean, default: null },
+    sandboxLastError: { type: String, default: "" },
 
     /** Anciennes soumissions : un seul fichier à la racine de `submissions/` */
     fileOriginalName: { type: String, default: "" },
@@ -40,5 +65,8 @@ const submissionSchema = new mongoose.Schema(
 );
 
 submissionSchema.index({ assignment: 1, student: 1, createdAt: -1 });
+submissionSchema.index({ student: 1, createdAt: -1 });
+submissionSchema.index({ assignment: 1, createdAt: -1 });
+submissionSchema.index({ assignment: 1, kind: 1, createdAt: -1 });
 
 export default mongoose.model("Submission", submissionSchema);

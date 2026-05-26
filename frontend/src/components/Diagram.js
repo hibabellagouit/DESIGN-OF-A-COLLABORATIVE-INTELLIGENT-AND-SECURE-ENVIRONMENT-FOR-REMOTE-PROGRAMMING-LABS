@@ -26,14 +26,20 @@ function niveauBand(n) {
   return { ryMid, rxMid: ryMid * RX_SCALE };
 }
 
-/** Regroupe les affectations par projet (un nœud = un projet). */
-function clusterByProject(assignments) {
+/** Tous les projets du catalogue + affectations (un nœud = un projet). */
+function clusterByProject(projects, assignments) {
   const map = new Map();
-  for (const a of assignments) {
+  for (const p of projects || []) {
+    const pid = mongoIdString(p._id);
+    if (!pid) continue;
+    map.set(pid, { projectId: pid, project: p, assignments: [] });
+  }
+  for (const a of assignments || []) {
     const pid = mongoIdString(a.project?._id ?? a.project);
     if (!pid) continue;
     if (!map.has(pid)) {
-      const proj = typeof a.project === "object" && a.project ? a.project : { _id: pid, title: "Projet" };
+      const proj =
+        typeof a.project === "object" && a.project ? a.project : { _id: pid, title: "Projet" };
       map.set(pid, { projectId: pid, project: proj, assignments: [] });
     }
     map.get(pid).assignments.push(a);
@@ -42,8 +48,12 @@ function clusterByProject(assignments) {
 }
 
 function clusterNiveau(cluster) {
-  const levels = cluster.assignments.map((x) => Math.min(5, Math.max(1, Number(x.niveau) || 1)));
-  return Math.min(5, Math.max(1, Math.max(...levels)));
+  const projectLevel = Math.min(5, Math.max(1, Number(cluster.project?.niveau) || 1));
+  if (!cluster.assignments.length) return projectLevel;
+  const levels = cluster.assignments.map((x) =>
+    Math.min(5, Math.max(1, Number(x.niveau) || projectLevel))
+  );
+  return Math.min(5, Math.max(1, Math.max(projectLevel, ...levels)));
 }
 
 function clusterAllValidated(cluster) {
@@ -102,7 +112,9 @@ function shortTitle(title) {
 
 export default function Diagram({ refreshKey = 0 }) {
   const navigate = useNavigate();
+  const [projects, setProjects] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [loadError, setLoadError] = useState("");
 
   const goToProjectId = (projectIdStr) => {
     const id = mongoIdString(projectIdStr);
@@ -111,17 +123,51 @@ export default function Diagram({ refreshKey = 0 }) {
   };
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/assignments`, { headers: authHeaders() })
-      .then((res) => res.json())
-      .then((data) => setAssignments(Array.isArray(data) ? data : []))
-      .catch(() => setAssignments([]));
+    let cancelled = false;
+    setLoadError("");
+    Promise.all([
+      fetch(`${API_BASE}/api/projects`, { headers: authHeaders() }).then(async (res) => {
+        const data = await res.json().catch(() => []);
+        if (!res.ok) throw new Error(data.message || data.error || "Projets introuvables");
+        return data;
+      }),
+      fetch(`${API_BASE}/api/assignments`, { headers: authHeaders() }).then(async (res) => {
+        const data = await res.json().catch(() => []);
+        if (!res.ok) throw new Error(data.message || data.error || "Affectations introuvables");
+        return data;
+      }),
+    ])
+      .then(([projData, assignData]) => {
+        if (cancelled) return;
+        setProjects(Array.isArray(projData) ? projData : []);
+        setAssignments(Array.isArray(assignData) ? assignData : []);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setProjects([]);
+          setAssignments([]);
+          setLoadError(e.message || "Chargement impossible");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [refreshKey]);
 
-  const clusters = useMemo(() => clusterByProject(assignments), [assignments]);
+  const clusters = useMemo(
+    () => clusterByProject(projects, assignments),
+    [projects, assignments]
+  );
   const positioned = useMemo(() => layoutProjectClusters(clusters), [clusters]);
 
   return (
     <div className="diagram-wrap">
+      {loadError ? <p className="feedback feedback--err">{loadError}</p> : null}
+      {clusters.length === 0 && !loadError ? (
+        <p className="diagram-card-head__hint" style={{ marginBottom: 12 }}>
+          Aucun projet pour le moment. Créez des projets dans Gestion — ils apparaîtront ici par niveau (N1–N5).
+        </p>
+      ) : null}
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         preserveAspectRatio="xMidYMid meet"
@@ -185,9 +231,10 @@ export default function Diagram({ refreshKey = 0 }) {
 
         {positioned.map(({ cluster, x, y, n }) => {
           const done = clusterAllValidated(cluster);
+          const unassigned = cluster.assignments.length === 0;
           const r = nodeRadiusForCluster(cluster);
           const stroke = done ? "#15803d" : LEVEL_COLORS[n];
-          const fill = done ? "#dcfce7" : "#fff1f2";
+          const fill = done ? "#dcfce7" : unassigned ? "#f8fafc" : "#fff1f2";
           const title = cluster.project?.title || "Projet";
           const lines = splitTitleTwoLines(title, 11);
           const fontSize = lines.length > 1 ? 7 : 8;
@@ -214,13 +261,33 @@ export default function Diagram({ refreshKey = 0 }) {
                 {title}
                 {"\n"}Niveau {n}
                 {"\n"}
-                {groupCount} groupe{groupCount > 1 ? "s" : ""} (affectations)
+                {unassigned
+                  ? "Aucune équipe — projet disponible"
+                  : `${groupCount} groupe${groupCount > 1 ? "s" : ""} (affectations)`}
                 {"\n"}
-                {done ? "Toutes les équipes sont validées" : "Au moins une équipe en cours"}
-                {"\n"}Cliquez pour voir le détail et les groupes.
+                {unassigned
+                  ? "En attente d'affectation"
+                  : done
+                    ? "Toutes les équipes sont validées"
+                    : "Au moins une équipe en cours"}
+                {"\n"}Cliquez pour voir le détail.
               </title>
-              <circle r={r + 2} fill="none" stroke={stroke} strokeOpacity={0.25} strokeWidth={2} />
-              <circle r={r} fill={fill} stroke={stroke} strokeWidth={1.7} filter="url(#nodeShadow)" />
+              <circle
+                r={r + 2}
+                fill="none"
+                stroke={stroke}
+                strokeOpacity={0.25}
+                strokeWidth={2}
+                strokeDasharray={unassigned ? "4 3" : undefined}
+              />
+              <circle
+                r={r}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={1.7}
+                strokeDasharray={unassigned ? "5 4" : undefined}
+                filter="url(#nodeShadow)"
+              />
               <text
                 textAnchor="middle"
                 dominantBaseline="middle"
@@ -253,6 +320,7 @@ export default function Diagram({ refreshKey = 0 }) {
         {clusters.map((cluster) => {
           const n = clusterNiveau(cluster);
           const done = clusterAllValidated(cluster);
+          const unassigned = cluster.assignments.length === 0;
           const groupCount = cluster.assignments.length;
           const studentsTotal = cluster.assignments.reduce((s, a) => s + (a.students?.length || 0), 0);
           const title = shortTitle(cluster.project?.title);
@@ -267,12 +335,24 @@ export default function Diagram({ refreshKey = 0 }) {
                 <div className="diagram-item__title-wrap">
                   <h4 className="diagram-item__title">{title}</h4>
                   <p className="diagram-item__meta">
-                    Niveau {n} · {groupCount} groupe{groupCount > 1 ? "s" : ""} · {studentsTotal} étudiant
-                    {studentsTotal > 1 ? "s" : ""}
+                    Niveau {n}
+                    {unassigned
+                      ? " · Aucune équipe"
+                      : ` · ${groupCount} groupe${groupCount > 1 ? "s" : ""} · ${studentsTotal} étudiant${
+                          studentsTotal > 1 ? "s" : ""
+                        }`}
                   </p>
                 </div>
-                <span className={done ? "status-pill status-pill--ok" : "status-pill status-pill--pending"}>
-                  {done ? "Tout validé" : "En cours"}
+                <span
+                  className={
+                    done
+                      ? "status-pill status-pill--ok"
+                      : unassigned
+                        ? "status-pill status-pill--locked"
+                        : "status-pill status-pill--pending"
+                  }
+                >
+                  {done ? "Tout validé" : unassigned ? "Disponible" : "En cours"}
                 </span>
               </div>
               <div className="diagram-item__actions">
@@ -281,7 +361,7 @@ export default function Diagram({ refreshKey = 0 }) {
                   className="btn btn-primary btn-sm"
                   onClick={() => goToProjectId(cluster.projectId)}
                 >
-                  Voir les groupes
+                  {unassigned ? "Voir le projet" : "Voir les groupes"}
                 </button>
               </div>
             </article>

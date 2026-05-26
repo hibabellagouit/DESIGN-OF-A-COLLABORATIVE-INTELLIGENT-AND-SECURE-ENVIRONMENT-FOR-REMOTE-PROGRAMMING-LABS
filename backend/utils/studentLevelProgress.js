@@ -2,43 +2,63 @@ import Assignment from "../models/Assignment.js";
 
 const MAX_LEVEL = 5;
 
-/**
- * Niveau max. de projet sélectionnable : 1 + dernier palier d’une chaîne de validations
- * consécutives 1, 2, 3… (sans trou).
- * Ex. validé 1 seulement → 2 ; validé 1 et 2 → 3 ; rien validé → 1.
- */
-export async function computeAllowedSelectLevel(studentId) {
-  const sid = studentId?.toString?.() ?? studentId;
-  const rows = await Assignment.find({ students: sid, status: "validé" }).select("niveau").lean();
-  const set = new Set(rows.map((r) => Number(r.niveau) || 1));
+/** Map studentId → Set of validated niveaux (one query). */
+export async function loadValidatedLevelsByStudent(studentIds) {
+  const ids = [...new Set((studentIds || []).map((id) => String(id)))].filter(Boolean);
+  const map = new Map();
+  for (const id of ids) map.set(id, new Set());
+
+  if (!ids.length) return map;
+
+  const rows = await Assignment.find({
+    students: { $in: ids },
+    status: "validé",
+  })
+    .select("students niveau")
+    .lean();
+
+  for (const row of rows) {
+    const n = Number(row.niveau) || 1;
+    for (const sid of row.students || []) {
+      const key = String(sid);
+      if (map.has(key)) map.get(key).add(n);
+    }
+  }
+  return map;
+}
+
+function allowedLevelFromSet(validatedSet) {
   let k = 0;
   for (let m = 1; m <= MAX_LEVEL; m++) {
-    if (set.has(m)) k = m;
+    if (validatedSet.has(m)) k = m;
     else break;
   }
   return Math.min(MAX_LEVEL, k + 1);
 }
 
-/** L’étudiant a une affectation validée à ce niveau. */
-export async function hasValidatedLevel(studentId, niveau) {
-  const n = Number(niveau) || 1;
-  const sid = studentId?.toString?.() ?? studentId;
-  const found = await Assignment.findOne({
-    students: sid,
-    status: "validé",
-    niveau: n,
-  }).select("_id");
-  return Boolean(found);
+/**
+ * Niveau max. de projet sélectionnable : 1 + dernier palier d’une chaîne de validations
+ * consécutives 1, 2, 3… (sans trou).
+ */
+export async function computeAllowedSelectLevel(studentId) {
+  const map = await loadValidatedLevelsByStudent([studentId]);
+  const set = map.get(String(studentId)) || new Set();
+  return allowedLevelFromSet(set);
 }
 
-/**
- * Tous les niveaux 1 … (niveauCible - 1) doivent être validés avant de valider / choisir niveauCible.
- */
+/** L’étudiant a une affectation validée à ce niveau. */
+export async function hasValidatedLevel(studentId, niveau) {
+  const map = await loadValidatedLevelsByStudent([studentId]);
+  return (map.get(String(studentId)) || new Set()).has(Number(niveau) || 1);
+}
+
 export async function hasCompletedPriorLevels(studentId, niveauCible) {
   const target = Number(niveauCible) || 1;
   if (target <= 1) return true;
+  const map = await loadValidatedLevelsByStudent([studentId]);
+  const set = map.get(String(studentId)) || new Set();
   for (let m = 1; m < target; m++) {
-    if (!(await hasValidatedLevel(studentId, m))) return false;
+    if (!set.has(m)) return false;
   }
   return true;
 }
@@ -48,9 +68,11 @@ export async function assertPriorLevelsValidated(studentIds, niveauCible) {
   const target = Number(niveauCible) || 1;
   if (target <= 1) return null;
 
+  const map = await loadValidatedLevelsByStudent(studentIds);
   for (const sid of studentIds) {
+    const set = map.get(String(sid)) || new Set();
     for (let m = 1; m < target; m++) {
-      if (!(await hasValidatedLevel(sid, m))) {
+      if (!set.has(m)) {
         return `Impossible au niveau ${target} : le niveau ${m} doit d’abord être validé pour chaque étudiant (progression 1 → 2 → …).`;
       }
     }

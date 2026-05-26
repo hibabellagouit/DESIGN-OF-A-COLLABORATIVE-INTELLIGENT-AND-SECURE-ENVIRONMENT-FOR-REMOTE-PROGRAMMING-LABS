@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import buildApp from "./app.js";
 import connectDB from "./config/db.js";
 import { ensureSeedAdmin } from "./bootstrap/ensureSeedAdmin.js";
+import { maybeStartEmbeddedWorker, resolveQueueBackend } from "./services/jobService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +15,9 @@ const app = buildApp();
 
 async function start() {
   await connectDB();
+  await resolveQueueBackend();
   await ensureSeedAdmin();
+  maybeStartEmbeddedWorker();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });

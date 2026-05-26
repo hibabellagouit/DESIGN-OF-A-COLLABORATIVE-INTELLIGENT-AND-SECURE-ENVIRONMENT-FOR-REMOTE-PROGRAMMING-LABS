@@ -6,15 +6,30 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test ./tests/api.smoke.test.mjs"
+    "worker": "node worker.js",
+    "lint": "eslint .",
+    "audit:ci": "npm audit --audit-level=high",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node --test ./tests/*.test.mjs",
+    "test:integration": "cross-env MONGODB_URI_TEST=mongodb://127.0.0.1:27017/tp_projets_integration INTEGRATION_TEST_MOCK_GITHUB=true INTEGRATION_TEST_MOCK_SANDBOX=true INTEGRATION_TEST_MOCK_OLLAMA=true JWT_SECRET=test_integration_secret node --test ./tests/integration/*.test.mjs",
+    "test:integration:memory": "cross-env INTEGRATION_USE_MEMORY_MONGO=true INTEGRATION_TEST_MOCK_GITHUB=true INTEGRATION_TEST_MOCK_SANDBOX=true JWT_SECRET=test_integration_secret node --test ./tests/integration/*.test.mjs",
+    "validate:sandbox": "node scripts/validate-sandbox-cycle.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^9.22.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.22.0",
+    "globals": "^16.0.0",
+    "mongodb-memory-server": "^10.1.4",
     "supertest": "^7.1.0"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bullmq": "^5.49.1",
+    "ioredis": "^5.6.0",
+    "adm-zip": "^0.5.17",
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.6",

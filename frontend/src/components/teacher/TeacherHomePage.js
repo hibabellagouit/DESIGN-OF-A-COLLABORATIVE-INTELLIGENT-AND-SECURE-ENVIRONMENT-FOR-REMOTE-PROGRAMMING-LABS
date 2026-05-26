@@ -1,30 +1,43 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
+import QuickAccessHub from "../QuickAccessHub";
 
 const LINKS = [
   {
     to: "/teacher-dashboard/gestion",
     title: "Gestion",
-    text: "Étudiants, projets, affectations",
-    accent: "",
+    text: "Créer des projets, inscrire des étudiants et former les équipes.",
+    icon: "G",
+    accent: "dash-hub-card--accent-rose",
+    featured: true,
   },
   {
     to: "/teacher-dashboard/graphe",
     title: "Graphe",
-    text: "Projets par niveau",
+    text: "Visualiser tous les projets par niveau (N1 à N5).",
+    icon: "◉",
     accent: "dash-hub-card--accent-violet",
   },
   {
-    to: "/teacher-dashboard/soumissions",
-    title: "Soumissions",
-    text: "Fichiers remis",
-    accent: "dash-hub-card--accent-amber",
+    to: "/teacher-dashboard/suivi",
+    title: "À traiter",
+    text: "Soumissions manquantes, notation, export CSV et corrélation IA.",
+    icon: "!",
+    accent: "dash-hub-card--accent-rose",
+    featured: true,
+  },
+  {
+    to: "/teacher-dashboard/classement",
+    title: "Classement",
+    text: "Scores globaux, notes et progression des étudiants.",
+    icon: "★",
+    accent: "dash-hub-card--accent-teal",
   },
   {
     to: "/teacher-dashboard/activite",
     title: "Activité",
-    text: "Notifications",
-    accent: "dash-hub-card--accent-teal",
+    text: "Notifications : choix de projet, dépôts et validations.",
+    icon: "◇",
+    accent: "dash-hub-card--accent-amber",
   },
 ];
 
@@ -33,27 +46,18 @@ export default function TeacherHomePage() {
     <div className="layout-content layout-content--wide">
       <div className="home-wrap">
         <section className="home-hero home-hero--teacher">
-          <p className="home-hero__eyebrow">Enseignant</p>
+          <p className="home-hero__eyebrow">Espace enseignant</p>
+          <h2 className="home-hero__title">Tableau de bord</h2>
+          <p className="home-hero__lead">
+            Gérez les projets, consultez le graphe des niveaux, notez les travaux depuis chaque fiche
+            projet et suivez le classement.
+          </p>
         </section>
 
-        <section className="home-section">
-          <h3 className="home-section__title home-section__title--inline">Sections</h3>
-          <div className="dash-hub-grid">
-            {LINKS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `dash-hub-card${item.accent ? ` ${item.accent}` : ""}${isActive ? " dash-hub-card--active" : ""}`
-                }
-              >
-                <h3 className="dash-hub-card__title">{item.title}</h3>
-                <p className="dash-hub-card__text">{item.text}</p>
-                <span className="dash-hub-card__cta">Ouvrir →</span>
-              </NavLink>
-            ))}
-          </div>
-        </section>
+        <QuickAccessHub
+          subtitle="Accédez aux principales fonctions de la plateforme. La notation se fait depuis le graphe, en ouvrant une fiche projet."
+          links={LINKS}
+        />
       </div>
     </div>
   );

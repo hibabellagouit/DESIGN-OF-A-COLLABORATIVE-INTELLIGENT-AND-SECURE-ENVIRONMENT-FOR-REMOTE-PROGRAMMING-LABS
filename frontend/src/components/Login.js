@@ -10,6 +10,7 @@ const Login = () => {
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
+  const [regGithub, setRegGithub] = useState("");
   const [regFeedback, setRegFeedback] = useState({ ok: true, text: "" });
   const [publicAllowReg, setPublicAllowReg] = useState(true);
   const [showFirstAdminSetup, setShowFirstAdminSetup] = useState(false);
@@ -40,7 +41,14 @@ const Login = () => {
       });
       const teacherData = await teacherRes.json();
       if (teacherRes.ok) {
-        localStorage.setItem("user", JSON.stringify({ ...teacherData, role: "teacher" }));
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            role: "teacher",
+            token: teacherData.token,
+            teacher: teacherData.teacher,
+          })
+        );
         navigate("/teacher-dashboard");
         return;
       }
@@ -55,7 +63,23 @@ const Login = () => {
       });
       const studentData = await studentRes.json();
       if (studentRes.ok) {
-        localStorage.setItem("user", JSON.stringify({ ...studentData, role: "student" }));
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            role: "student",
+            token: studentData.token,
+            student: studentData.student,
+          })
+        );
+        if (studentData.githubRequired) {
+          emitToast({
+            title: "GitHub requis",
+            message:
+              studentData.message ||
+              "Complétez votre identifiant GitHub pour accéder à toutes les fonctionnalités.",
+            variant: "info",
+          });
+        }
         navigate("/student-dashboard");
         return;
       }
@@ -70,7 +94,14 @@ const Login = () => {
       });
       const adminData = await adminRes.json();
       if (adminRes.ok) {
-        localStorage.setItem("user", JSON.stringify({ ...adminData, role: "admin" }));
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            role: "admin",
+            token: adminData.token,
+            admin: adminData.admin,
+          })
+        );
         navigate("/admin-dashboard");
         return;
       }
@@ -115,6 +146,11 @@ const Login = () => {
   const handleRegisterStudent = async (e) => {
     e.preventDefault();
     setRegFeedback({ ok: true, text: "" });
+    const ghTrim = regGithub.trim().replace(/^@/, "");
+    if (!ghTrim) {
+      setRegFeedback({ ok: false, text: "L’identifiant GitHub est obligatoire." });
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/api/students/register`, {
         method: "POST",
@@ -123,6 +159,7 @@ const Login = () => {
           name: regName,
           email: regEmail,
           password: regPassword,
+          githubUsername: ghTrim,
         }),
       });
       const data = await res.json();
@@ -134,6 +171,7 @@ const Login = () => {
       setRegName("");
       setRegEmail("");
       setRegPassword("");
+      setRegGithub("");
       setShowRegister(false);
     } catch (err) {
       setRegFeedback({ ok: false, text: err.message });
@@ -249,6 +287,22 @@ const Login = () => {
                   onChange={(e) => setRegPassword(e.target.value)}
                   required
                   autoComplete="new-password"
+                />
+
+                <label className="form-label">
+                  Identifiant GitHub <span className="check-row__muted">(obligatoire, sans&nbsp;@)</span>
+                </label>
+                <input
+                  className="form-input form-input--full"
+                  placeholder="ex. monpseudo"
+                  value={regGithub}
+                  onChange={(e) => setRegGithub(e.target.value)}
+                  maxLength={39}
+                  required
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="off"
                 />
 
                 <button type="submit" className="btn btn-primary btn-block">

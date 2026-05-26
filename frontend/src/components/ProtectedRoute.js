@@ -1,15 +1,16 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
+import { readToken, readTokenRole, readUser } from "../authStorage";
 
 const ProtectedRoute = ({ children, role }) => {
-  let user = null;
-  try {
-    const raw = localStorage.getItem("user");
-    if (raw) user = JSON.parse(raw);
-  } catch {
-    user = null;
+  const user = readUser();
+  const token = readToken();
+  const tokenRole = readTokenRole();
+  if (!user || !token || user.role !== role) {
+    return <Navigate to="/" replace />;
   }
-  if (!user || user.role !== role) {
+  if (tokenRole && tokenRole !== role) {
+    localStorage.removeItem("user");
     return <Navigate to="/" replace />;
   }
   return children;

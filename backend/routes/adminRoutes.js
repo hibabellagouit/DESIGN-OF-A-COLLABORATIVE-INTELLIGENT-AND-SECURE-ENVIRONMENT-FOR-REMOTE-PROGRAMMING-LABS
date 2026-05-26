@@ -9,6 +9,7 @@ import {
   updateSecurityPolicy,
   listAuditLogs,
   createAdmin,
+  createTeacher,
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -19,6 +20,7 @@ router.post("/first-setup", firstSetupAdmin);
 router.get("/users", requireAuth, requireRole("admin"), listUsers);
 router.patch("/users/:role/:id", requireAuth, requireRole("admin"), patchUserDisabled);
 router.post("/admins", requireAuth, requireRole("admin"), createAdmin);
+router.post("/teachers", requireAuth, requireRole("admin"), createTeacher);
 
 router.get("/security-policy", requireAuth, requireRole("admin"), getSecurityPolicy);
 router.put("/security-policy", requireAuth, requireRole("admin"), updateSecurityPolicy);

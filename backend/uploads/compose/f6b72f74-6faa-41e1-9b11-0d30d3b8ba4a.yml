@@ -1,0 +1,9 @@
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    command: sh -c "npm install && npm test"
+    environment:
+      - NODE_ENV=test
+      

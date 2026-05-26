@@ -4,7 +4,13 @@ import {
   listSubmissionsForStudent,
   listSubmissionsForAssignment,
   updateSubmissionStatus,
+  gradeSubmission,
+  aiGradeSubmission,
+  getAiGradingStatus,
+  getGradingRubric,
   downloadSubmissionFile,
+  getGithubParticipation,
+  previewComposeChecklist,
 } from "../controllers/submissionController.js";
 import {
   uploadSubmission,
@@ -51,8 +57,32 @@ router.get(
   listSubmissionsForAssignment
 );
 
+// Teacher : barème de notation des projets
+router.get("/grading-rubric", requireAuth, requireRole("teacher", "student"), getGradingRubric);
+
+router.post(
+  "/compose-checklist",
+  requireAuth,
+  requireRole("teacher", "student"),
+  previewComposeChecklist
+);
+
+// Teacher : statut Ollama + évaluation IA préliminaire
+router.get("/ai-status", requireAuth, requireRole("teacher"), getAiGradingStatus);
+router.post("/:id/ai-grade", requireAuth, requireRole("teacher"), aiGradeSubmission);
+
 // Teacher : mise à jour du statut de suivi (en attente → en cours d'évaluation → évalué)
 router.patch("/:id/status", requireAuth, requireRole("teacher"), updateSubmissionStatus);
+
+// Teacher : notation selon le barème (/20)
+router.patch("/:id/grade", requireAuth, requireRole("teacher"), gradeSubmission);
+
+router.get(
+  "/:id/github-participation",
+  requireAuth,
+  requireRole("teacher", "student"),
+  getGithubParticipation
+);
 
 // Download file (teacher or owner student)
 router.get("/:id/file", requireAuth, downloadSubmissionFile);

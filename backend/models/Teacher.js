@@ -10,4 +10,6 @@ const teacherSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+teacherSchema.index({ email: 1 }, { unique: true, sparse: true });
+
 export default mongoose.model("Teacher", teacherSchema);

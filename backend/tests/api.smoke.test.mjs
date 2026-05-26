@@ -15,6 +15,18 @@ test("GET /api/health retourne 200", async () => {
   const res = await request(app).get("/api/health");
   assert.equal(res.status, 200);
   assert.equal(res.body.ok, true);
+  assert.equal(typeof res.body.ready, "boolean");
+  assert.ok(res.body.services);
+});
+
+test("GET /api/teachers/pending sans jeton retourne 401", async () => {
+  const res = await request(app).get("/api/teachers/pending");
+  assert.equal(res.status, 401);
+});
+
+test("GET /api/students/me/grades sans jeton retourne 401", async () => {
+  const res = await request(app).get("/api/students/me/grades");
+  assert.equal(res.status, 401);
 });
 
 test("GET /api/assignments sans jeton retourne 401", async () => {

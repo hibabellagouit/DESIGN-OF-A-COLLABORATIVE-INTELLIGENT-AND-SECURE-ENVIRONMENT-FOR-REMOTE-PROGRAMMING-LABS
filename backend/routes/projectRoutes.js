@@ -7,8 +7,9 @@ import {
   updateProject,
   deleteProject,
   streamCahierFile,
+  streamComposeFile,
 } from "../controllers/projectController.js";
-import { uploadCdc } from "../middleware/cdcUpload.js";
+import { uploadProjectArtifacts } from "../middleware/projectUpload.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -36,8 +37,8 @@ function ensureBodyParsed(req, res, next) {
   });
 }
 
-function uploadSingle(req, res, next) {
-  uploadCdc.single("cahierFile")(req, res, (err) => {
+function uploadProjectFields(req, res, next) {
+  uploadProjectArtifacts(req, res, (err) => {
     if (err) {
       return res.status(400).json({ message: err.message || "Erreur upload" });
     }
@@ -57,15 +58,16 @@ router.get(
 router.get("/:id", requireAuth, getProjectById);
 
 router.get("/:id/cdc", requireAuth, streamCahierFile);
+router.get("/:id/compose", requireAuth, streamComposeFile);
 
-router.post("/", requireAuth, requireRole("teacher"), ensureBodyParsed, uploadSingle, createProject);
+router.post("/", requireAuth, requireRole("teacher"), ensureBodyParsed, uploadProjectFields, createProject);
 
 router.put(
   "/:id",
   requireAuth,
   requireRole("teacher"),
   ensureBodyParsed,
-  uploadSingle,
+  uploadProjectFields,
   updateProject
 );
 

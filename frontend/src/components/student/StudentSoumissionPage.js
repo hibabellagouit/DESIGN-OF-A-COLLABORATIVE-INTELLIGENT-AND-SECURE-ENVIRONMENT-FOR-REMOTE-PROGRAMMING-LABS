@@ -4,6 +4,8 @@ import { API_BASE } from "../../apiBase";
 import { authHeaders } from "../../authStorage";
 import { useStudentWorkspace } from "../../context/StudentWorkspaceContext";
 import { submissionStatusLabel, submissionStatusPillClass } from "../../submissionStatusUi";
+import GithubParticipationPanel from "../GithubParticipationPanel";
+import DockerComposeGuidePanel from "../DockerComposeGuidePanel";
 
 function filesFromInput(fileList) {
   return Array.from(fileList || []);
@@ -135,8 +137,20 @@ export default function StudentSoumissionPage() {
                   </label>
                 </div>
               </div>
+
+              <DockerComposeGuidePanel
+                mode={submissionMode}
+                files={submissionMode === "file" ? submissionFiles : []}
+                githubUrl={submissionGithubUrl}
+              />
+
               {submissionMode === "file" ? (
                 <>
+                  <p className="diagram-item__meta" style={{ marginTop: 6 }}>
+                    Utilisez la <strong>checklist</strong> ci-dessus : le fichier{" "}
+                    <strong>docker-compose.yml</strong> (ou .yaml) doit être à la <strong>racine</strong> des
+                    fichiers envoyés ou du ZIP.
+                  </p>
                   <label className="form-label" style={{ marginTop: 12, display: "block" }}>
                     Fichiers du projet (plusieurs à la fois : Ctrl ou Maj + clic)
                   </label>
@@ -163,8 +177,10 @@ export default function StudentSoumissionPage() {
                     onChange={(e) => setSubmissionFiles(filesFromInput(e.target.files))}
                   />
                   <p className="diagram-item__meta" style={{ marginTop: 8 }}>
-                    Vous pouvez aussi envoyer une archive <strong>.zip</strong> en un seul fichier. Maximum
-                    120 fichiers par envoi ; types courants (code, config, images) acceptés.
+                    Vous pouvez aussi envoyer une archive <strong>.zip</strong> en un seul fichier ; si c&apos;est le
+                    cas, la racine du ZIP doit contenir <strong>docker-compose.yml</strong> ou{" "}
+                    <strong>docker-compose.yaml</strong>. Maximum 120 fichiers par envoi ; types courants (code,
+                    config, images) acceptés.
                   </p>
                   {submissionFiles.length > 0 ? (
                     <p className="diagram-item__meta" style={{ marginTop: 6 }}>
@@ -191,6 +207,15 @@ export default function StudentSoumissionPage() {
                   />
                   <p className="diagram-item__meta" style={{ marginTop: 6 }}>
                     Envoyez soit des fichiers / un dossier ici, soit un seul lien public — pas les deux.
+                  </p>
+                  <p className="diagram-item__meta" style={{ marginTop: 6 }}>
+                    Les tests s&apos;exécutent dans un <strong>environnement Docker</strong> ; le dépôt doit exposer{" "}
+                    <strong>docker-compose.yml</strong> ou <strong>docker-compose.yaml</strong> à la racine.
+                  </p>
+                  <p className="diagram-item__meta" style={{ marginTop: 6 }}>
+                    Pour que l&apos;enseignant voie la <strong>participation réelle au dépôt</strong>, vos commits
+                    Git doivent utiliser soit la <strong>même adresse e-mail</strong> que votre compte sur la
+                    plateforme, soit votre <strong>identifiant GitHub</strong> (gestion étudiants).
                   </p>
                 </>
               )}
@@ -228,7 +253,13 @@ export default function StudentSoumissionPage() {
                           {submissionStatusLabel(s.status)}
                         </span>
                         {when} — {label}
-                        {s.note ? (
+                        {s.gradeTotal != null && Number.isFinite(Number(s.gradeTotal)) ? (
+                          <span>
+                            {" "}
+                            · <em>Note</em> : {s.gradeTotal}/20
+                            {s.note && s.note !== `${s.gradeTotal}/20` ? ` (${s.note})` : ""}
+                          </span>
+                        ) : s.note ? (
                           <span>
                             {" "}
                             · <em>Note enseignant</em> : {s.note}
@@ -240,6 +271,9 @@ export default function StudentSoumissionPage() {
                 </ul>
               )}
             </div>
+            {assignmentSubs[0]?._id ? (
+              <GithubParticipationPanel submissionId={String(assignmentSubs[0]._id)} compact />
+            ) : null}
           </>
         )}
       </div>

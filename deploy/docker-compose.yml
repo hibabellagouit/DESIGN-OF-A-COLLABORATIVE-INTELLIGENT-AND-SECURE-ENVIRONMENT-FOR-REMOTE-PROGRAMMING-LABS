@@ -1,0 +1,64 @@
+# Déploiement de démonstration — adapter les secrets en production.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/projetDB
+      REDIS_URL: redis://redis:6379
+      PORT: 5000
+      JWT_SECRET: ${JWT_SECRET:-change_me}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - backend_uploads:/app/uploads
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["node", "worker.js"]
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/projetDB
+      REDIS_URL: redis://redis:6379
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - backend_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+  backend_uploads:

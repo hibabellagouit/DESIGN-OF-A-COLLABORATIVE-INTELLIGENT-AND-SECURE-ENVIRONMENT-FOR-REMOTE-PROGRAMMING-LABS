@@ -18,13 +18,14 @@ export const registerTeacher = async (req, res) => {
       return res.status(400).json({ message: "Missing fields" });
     }
 
-    const existing = await Teacher.findOne({ email });
+    const em = String(email).toLowerCase().trim();
+    const existing = await Teacher.findOne({ email: em });
     if (existing) {
-      return res.status(409).json({ message: "Email already used" });
+      return res.status(409).json({ message: "Cet e-mail est déjà utilisé." });
     }
 
     const hashed = await bcrypt.hash(password, 10);
-    const teacher = new Teacher({ name, email, password: hashed });
+    const teacher = new Teacher({ name: String(name).trim(), email: em, password: hashed });
 
     await teacher.save();
 
@@ -51,8 +52,9 @@ export const registerTeacher = async (req, res) => {
 export const loginTeacher = async (req, res) => {
   try {
     const { email, password } = req.body || {};
+    const em = String(email || "").toLowerCase().trim();
 
-    const teacher = await Teacher.findOne({ email });
+    const teacher = await Teacher.findOne({ email: em });
 
     if (!teacher) {
       await recordAudit(req, {

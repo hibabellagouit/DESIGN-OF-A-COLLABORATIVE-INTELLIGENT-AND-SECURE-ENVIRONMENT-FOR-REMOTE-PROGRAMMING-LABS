@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../apiBase";
-import { authHeaders } from "../authStorage";
+import { apiErrorMessage, authHeaders } from "../authStorage";
 import { emitToast } from "../toastBus";
 import {
   displaySubmissionStatus,
   submissionStatusLabel,
   submissionStatusPillClass,
 } from "../submissionStatusUi";
+import SubmissionGradeForm from "./SubmissionGradeForm";
 
 function readToken() {
   try {
@@ -85,7 +86,7 @@ export default function TeacherSubmissions({ refreshKey = 0 }) {
           body: JSON.stringify({ status }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.message || data.error || "Mise à jour impossible");
+        if (!res.ok) throw new Error(apiErrorMessage(data, res, "Mise à jour impossible"));
         emitToast({ title: "Statut", message: "Soumission mise à jour." });
         await reloadSubs();
       } catch (e) {
@@ -195,6 +196,7 @@ export default function TeacherSubmissions({ refreshKey = 0 }) {
                         <span className="project-card__label">Note</span> {s.note}
                       </p>
                     ) : null}
+                    <SubmissionGradeForm submission={s} onGraded={() => reloadSubs()} compact />
                     <div className="cdc-actions" style={{ flexWrap: "wrap", gap: 8 }}>
                       {isGithub ? (
                         <a

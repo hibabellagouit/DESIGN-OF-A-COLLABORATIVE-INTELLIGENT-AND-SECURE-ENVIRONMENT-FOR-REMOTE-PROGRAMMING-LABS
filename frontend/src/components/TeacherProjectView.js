@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+﻿import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { API_BASE } from "../apiBase";
 import { REFERENCE_KIND_LABELS } from "../referenceLabels";
@@ -11,6 +11,12 @@ import {
   submissionStatusLabel,
   submissionStatusPillClass,
 } from "../submissionStatusUi";
+import TeamGradingPanel from "./TeamGradingPanel";
+import GithubParticipationPanel from "./GithubParticipationPanel";
+import SandboxResultPanel from "./SandboxResultPanel";
+import DockerComposeGuidePanel, {
+  SubmissionComposeChecklist,
+} from "./DockerComposeGuidePanel";
 
 function formatSize(n) {
   const v = Number(n) || 0;
@@ -19,7 +25,29 @@ function formatSize(n) {
   return `${(v / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+function isRootComposePath(rel) {
+  const norm = String(rel || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "");
+  const parts = norm.split("/").filter(Boolean);
+  if (parts.length !== 1) return false;
+  return /^docker-compose\.ya?ml$/i.test(parts[0]);
+}
+
 function SandboxHintsPanel({ hints }) {
+  if (hints?.composeFiles?.length) {
+    return (
+      <div className="sandbox-hints-card">
+        <h4 className="sandbox-hints-card__title">Tests Docker (docker compose)</h4>
+        <p className="sandbox-hints-card__warn" style={{ marginTop: 0 }}>
+          docker-compose.yml à la racine requis · sandbox durci (réseau isolé, limites CPU/RAM).
+          Conteneurs laissés actifs après succès — bouton « Arrêter le sandbox ». Mode rapide :{" "}
+          <code>SANDBOX_COMPOSE_MODE=fast</code>.
+        </p>
+        <DockerComposeGuidePanel mode="file" files={[]} showGuideDefault />
+      </div>
+    );
+  }
   if (!hints?.languages?.length) return null;
   return (
     <div className="sandbox-hints-card">
@@ -47,22 +75,36 @@ function SandboxHintsPanel({ hints }) {
   );
 }
 
-function SubmissionWorkRow({ submission, token, onRun, runBusy, runResult, onPatchStatus, statusBusy }) {
+function SubmissionWorkRow({
+  submission,
+  token,
+  onRun,
+  runBusy,
+  runResult,
+  onPatchStatus,
+  statusBusy,
+  assignmentValidated,
+  onSandboxStopped,
+  onSandboxLinksRefreshed,
+}) {
   const sid = mongoIdString(submission._id);
   const isGithub = (submission.kind || "file") === "github" && submission.githubUrl;
   const projectFiles = Array.isArray(submission.projectFiles) ? submission.projectFiles : [];
   const isBundle = Boolean(submission.bundleId) && projectFiles.length > 0 && !isGithub;
   const nProjectFiles = projectFiles.length;
-  const hasRunnableInBundle = projectFiles.some((p) =>
-    /\.(py|js)$/i.test(p.relativePath || p.storedName || "")
+  const hasComposeInBundle = projectFiles.some((p) =>
+    isRootComposePath(p.relativePath || p.storedName || "")
   );
+  const isSingleZip =
+    projectFiles.length === 1 && /\.zip$/i.test(projectFiles[0]?.relativePath || "");
   const downloadUrl = `${API_BASE}/api/submissions/${sid}/file?download=1&token=${encodeURIComponent(token)}`;
   const viewUrl = `${API_BASE}/api/submissions/${sid}/file?token=${encodeURIComponent(token)}`;
   const name = submission.student?.name || submission.student?.email || "Étudiant";
   const when = submission.createdAt ? new Date(submission.createdAt).toLocaleString() : "";
-  const ext = (submission.fileOriginalName || "").toLowerCase();
-  const canRun =
-    !isGithub && (hasRunnableInBundle || ext.endsWith(".py") || ext.endsWith(".js"));
+  const canRun = isGithub || hasComposeInBundle || isSingleZip;
+  const autoSandbox = submission.sandboxResult;
+  const sandboxPending = submission.sandboxRanAt == null && submission.sandboxOk == null;
+  const displaySandbox = runResult ?? autoSandbox;
   const st = displaySubmissionStatus(submission.status);
 
   return (
@@ -119,14 +161,15 @@ function SubmissionWorkRow({ submission, token, onRun, runBusy, runResult, onPat
               disabled={runBusy}
               onClick={() => onRun(sid)}
             >
-              {runBusy ? "…" : "Lancer"}
+              {runBusy ? "Test en cours…" : "Tester (compose)"}
             </button>
-          ) : isGithub ? (
-            <span className="diagram-item__meta">Sandbox : fichier .py / .js uniquement</span>
           ) : (
-            <span className="diagram-item__meta">.py / .js dans le dépôt</span>
+            <span className="diagram-item__meta">docker-compose.yml à la racine requis</span>
           )}
         </div>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <SubmissionComposeChecklist submission={submission} composeAtRoot={canRun} />
       </div>
       {onPatchStatus && (st === "en attente" || st === "en cours d'évaluation") ? (
         <div className="cdc-actions" style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
@@ -164,31 +207,30 @@ function SubmissionWorkRow({ submission, token, onRun, runBusy, runResult, onPat
       ) : null}
       {submission.note ? (
         <p className="diagram-item__meta" style={{ marginTop: 8 }}>
-          <strong>Note</strong> : {submission.note}
+          <strong>Note finale</strong> : {submission.note}
         </p>
       ) : null}
-      {runResult != null && (
-        <>
-          {runResult.hint ? (
-            <div className="sandbox-hint-banner" role="note">
-              {runResult.hint}
-            </div>
-          ) : null}
-          <pre
-            className={`sandbox-output${runResult.ok ? " sandbox-output--ok" : " sandbox-output--err"}`}
-            role="status"
-          >
-          {runResult.timedOut ? "Temps dépassé.\n" : ""}
-          {runResult.exitCode != null ? `Code sortie : ${runResult.exitCode}\n` : ""}
-          {runResult.image ? `Image : ${runResult.image}\n` : ""}
-          {runResult.stdout ? `--- stdout ---\n${runResult.stdout}\n` : ""}
-          {runResult.stderr ? `--- stderr ---\n${runResult.stderr}\n` : ""}
-          {!runResult.stdout && !runResult.stderr && !runResult.timedOut && runResult.ok
-            ? "(aucune sortie)"
-            : ""}
-        </pre>
-        </>
-      )}
+      {assignmentValidated && !submission.note ? (
+        <p className="diagram-card-head__hint" style={{ marginTop: 8 }}>
+          Niveau validé — voir le récapitulatif des notes au-dessus.
+        </p>
+      ) : null}
+      {sandboxPending ? (
+        <p className="diagram-card-head__hint" style={{ marginTop: 8 }}>
+          Test Docker automatique en cours…
+        </p>
+      ) : null}
+      {displaySandbox != null ? (
+        <div style={{ marginTop: 8 }}>
+          <SandboxResultPanel
+            result={displaySandbox}
+            submissionId={sid}
+            onStopped={onSandboxStopped}
+            onLinksRefreshed={onSandboxLinksRefreshed}
+          />
+        </div>
+      ) : null}
+      {sid ? <GithubParticipationPanel submissionId={sid} /> : null}
     </div>
   );
 }
@@ -286,16 +328,59 @@ export default function TeacherProjectView() {
     }
   };
 
+  const pollSandboxJob = async (jobId, submissionId) => {
+    for (let i = 0; i < 90; i += 1) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const jr = await fetch(`${API_BASE}/api/jobs/${jobId}`, { headers: authHeaders() });
+      const jd = await jr.json().catch(() => ({}));
+      if (!jr.ok) {
+        setRunResults((r) => ({
+          ...r,
+          [submissionId]: { ok: false, stderr: jd.error || jd.message || `Erreur ${jr.status}` },
+        }));
+        return;
+      }
+      if (jd.status === "done") {
+        setRunResults((r) => ({
+          ...r,
+          [submissionId]: jd.result?.result || { ok: jd.result?.ok, stderr: "Terminé" },
+        }));
+        emitToast({
+          title: jd.result?.ok ? "Docker" : "Docker (avertissement)",
+          message: "Test terminé.",
+          variant: jd.result?.ok ? "success" : "info",
+        });
+        return;
+      }
+      if (jd.status === "failed") {
+        setRunResults((r) => ({
+          ...r,
+          [submissionId]: { ok: false, stderr: jd.error || "Échec du test" },
+        }));
+        return;
+      }
+    }
+    setRunResults((r) => ({
+      ...r,
+      [submissionId]: { ok: false, stderr: "Délai dépassé — le test Docker continue peut-être en arrière-plan." },
+    }));
+  };
+
   const runSubmission = async (submissionId) => {
     if (!submissionId || runBusy[submissionId]) return;
     setRunBusy((b) => ({ ...b, [submissionId]: true }));
     try {
-      const res = await fetch(`${API_BASE}/api/sandbox/run-submission`, {
+      const res = await fetch(`${API_BASE}/api/jobs/sandbox`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ submissionId }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 202 && data.jobId) {
+        emitToast({ title: "Docker", message: "Test lancé en arrière-plan…", variant: "info" });
+        await pollSandboxJob(data.jobId, submissionId);
+        return;
+      }
       if (!res.ok) {
         setRunResults((r) => ({
           ...r,
@@ -307,6 +392,11 @@ export default function TeacherProjectView() {
         return;
       }
       setRunResults((r) => ({ ...r, [submissionId]: data.result || { ok: false, stderr: "Réponse vide" } }));
+      emitToast({
+        title: data.ok ? "Docker" : "Docker (avertissement)",
+        message: data.message || (data.ok ? "Test terminé." : "Test terminé avec erreurs."),
+        variant: data.ok ? "success" : "info",
+      });
     } catch (e) {
       setRunResults((r) => ({
         ...r,
@@ -471,12 +561,42 @@ export default function TeacherProjectView() {
                               runResult={runResults[subId]}
                               onPatchStatus={patchSubmissionStatus}
                               statusBusy={statusBusyId === subId}
+                              assignmentValidated={done}
+                              onSandboxStopped={(id) => {
+                                setRunResults((prev) => {
+                                  const cur = prev[id];
+                                  if (!cur) return prev;
+                                  return {
+                                    ...prev,
+                                    [id]: {
+                                      ...cur,
+                                      containersLeftRunning: false,
+                                      accessLinks: [],
+                                    },
+                                  };
+                                });
+                              }}
+                              onSandboxLinksRefreshed={(id, links) => {
+                                setRunResults((prev) => {
+                                  const cur = prev[id];
+                                  if (!cur) return prev;
+                                  return { ...prev, [id]: { ...cur, accessLinks: links } };
+                                });
+                              }}
                             />
                           );
                         })}
                       </div>
                     )}
                   </div>
+
+                  <TeamGradingPanel
+                    assignment={g}
+                    students={students}
+                    hasSubmission={submissions.length > 0}
+                    validated={done}
+                    onGraded={load}
+                  />
 
                   {!done && (
                     <button

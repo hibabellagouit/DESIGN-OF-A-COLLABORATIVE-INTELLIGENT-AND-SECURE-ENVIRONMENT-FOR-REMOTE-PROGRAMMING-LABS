@@ -3,8 +3,8 @@ import path from "path";
 import Project from "../models/Project.js";
 import Assignment from "../models/Assignment.js";
 import Submission from "../models/Submission.js";
-import { getPublicSandboxHints } from "../services/dockerSandbox.js";
-import { CDC_DIR } from "../middleware/cdcUpload.js";
+import { getPublicComposeHints } from "../services/dockerComposeRunner.js";
+import { CDC_DIR, COMPOSE_DIR } from "../middleware/projectUpload.js";
 import { submissionStatusForApi } from "../utils/submissionStatus.js";
 
 function safeUnlink(filePath) {
@@ -12,6 +12,15 @@ function safeUnlink(filePath) {
     if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
   } catch {
     // ignore
+  }
+}
+
+function cleanupUploadedProjectFiles(req) {
+  const bag = req.files;
+  if (!bag || typeof bag !== "object") return;
+  for (const arr of Object.values(bag)) {
+    if (!Array.isArray(arr)) continue;
+    for (const f of arr) safeUnlink(f?.path);
   }
 }
 
@@ -29,16 +38,29 @@ function parseBody(req) {
     cahierDeCharge: b.cahierDeCharge || "",
     referenceKind: b.referenceKind || "autre",
     referenceValidation: b.referenceValidation || "",
+    submissionDeadline:
+      b.submissionDeadline && String(b.submissionDeadline).trim()
+        ? new Date(b.submissionDeadline)
+        : null,
   };
 }
 
 export const createProject = async (req, res) => {
   try {
     const fields = parseBody(req);
+    const cahier = req.files?.cahierFile?.[0];
+    const compose = req.files?.composeFile?.[0];
 
     if (!fields.title?.trim()) {
-      safeUnlink(req.file?.path);
+      cleanupUploadedProjectFiles(req);
       return res.status(400).json({ message: "Titre requis" });
+    }
+    if (!compose) {
+      cleanupUploadedProjectFiles(req);
+      return res.status(400).json({
+        message:
+          "Fichier docker-compose obligatoire : joignez docker-compose.yml ou docker-compose.yaml (environnement Docker pour les tests).",
+      });
     }
 
     const project = new Project({
@@ -50,16 +72,19 @@ export const createProject = async (req, res) => {
         : "autre",
     });
 
-    if (req.file) {
-      project.cahierFileOriginalName = req.file.originalname;
-      project.cahierFileStoredName = req.file.filename;
-      project.cahierFileMimeType = req.file.mimetype;
+    if (cahier) {
+      project.cahierFileOriginalName = cahier.originalname;
+      project.cahierFileStoredName = cahier.filename;
+      project.cahierFileMimeType = cahier.mimetype;
     }
+    project.composeFileOriginalName = compose.originalname;
+    project.composeFileStoredName = compose.filename;
+    project.composeFileMimeType = compose.mimetype || "text/yaml";
 
     await project.save();
     res.status(201).json({ message: "Project created", project });
   } catch (error) {
-    safeUnlink(req.file?.path);
+    cleanupUploadedProjectFiles(req);
     res.status(500).json({ error: error.message });
   }
 };
@@ -91,6 +116,11 @@ export const getProjectDetailWithGroups = async (req, res) => {
 
     const groups = await Assignment.find({ project: project._id })
       .populate("students")
+      .populate({
+        path: "team",
+        select: "name leader",
+        populate: { path: "leader", select: "name email" },
+      })
       .sort({ status: 1, _id: 1 });
 
     const groupIds = groups.map((g) => g._id);
@@ -119,7 +149,7 @@ export const getProjectDetailWithGroups = async (req, res) => {
     res.json({
       project,
       groups: groupsPayload,
-      sandboxHints: getPublicSandboxHints(),
+      sandboxHints: getPublicComposeHints(),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -129,15 +159,17 @@ export const getProjectDetailWithGroups = async (req, res) => {
 export const updateProject = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
+    const cahier = req.files?.cahierFile?.[0];
+    const compose = req.files?.composeFile?.[0];
     if (!project) {
-      safeUnlink(req.file?.path);
+      cleanupUploadedProjectFiles(req);
       return res.status(404).json({ message: "Projet introuvable" });
     }
 
     const fields = parseBody(req);
     const title = (fields.title || project.title || "").trim();
     if (!title) {
-      safeUnlink(req.file?.path);
+      cleanupUploadedProjectFiles(req);
       return res.status(400).json({ message: "Titre requis" });
     }
 
@@ -154,18 +186,30 @@ export const updateProject = async (req, res) => {
       ? fields.referenceKind
       : project.referenceKind || "autre";
     project.referenceValidation = fields.referenceValidation ?? project.referenceValidation;
+    if (req.body?.submissionDeadline === "" || fields.submissionDeadline === null) {
+      project.submissionDeadline = null;
+    } else if (fields.submissionDeadline) {
+      project.submissionDeadline = fields.submissionDeadline;
+    }
 
-    // Replace CDC file if new file uploaded
-    if (req.file) {
+    if (cahier) {
       if (project.cahierFileStoredName) {
         safeUnlink(path.join(CDC_DIR, project.cahierFileStoredName));
       }
-      project.cahierFileOriginalName = req.file.originalname;
-      project.cahierFileStoredName = req.file.filename;
-      project.cahierFileMimeType = req.file.mimetype;
+      project.cahierFileOriginalName = cahier.originalname;
+      project.cahierFileStoredName = cahier.filename;
+      project.cahierFileMimeType = cahier.mimetype;
     }
 
-    // Optional: remove CDC file metadata + file
+    if (compose) {
+      if (project.composeFileStoredName) {
+        safeUnlink(path.join(COMPOSE_DIR, project.composeFileStoredName));
+      }
+      project.composeFileOriginalName = compose.originalname;
+      project.composeFileStoredName = compose.filename;
+      project.composeFileMimeType = compose.mimetype || "text/yaml";
+    }
+
     if (String(req.body?.removeCdc || "").toLowerCase() === "1") {
       if (project.cahierFileStoredName) {
         safeUnlink(path.join(CDC_DIR, project.cahierFileStoredName));
@@ -175,10 +219,18 @@ export const updateProject = async (req, res) => {
       project.cahierFileMimeType = "";
     }
 
+    if (!project.composeFileStoredName) {
+      cleanupUploadedProjectFiles(req);
+      return res.status(400).json({
+        message:
+          "Chaque projet doit disposer d’un docker-compose : ajoutez un fichier .yml ou .yaml (référence Docker).",
+      });
+    }
+
     await project.save();
     res.json({ message: "Project updated", project });
   } catch (error) {
-    safeUnlink(req.file?.path);
+    cleanupUploadedProjectFiles(req);
     res.status(500).json({ error: error.message });
   }
 };
@@ -190,6 +242,9 @@ export const deleteProject = async (req, res) => {
 
     if (project.cahierFileStoredName) {
       safeUnlink(path.join(CDC_DIR, project.cahierFileStoredName));
+    }
+    if (project.composeFileStoredName) {
+      safeUnlink(path.join(COMPOSE_DIR, project.composeFileStoredName));
     }
     await Project.deleteOne({ _id: project._id });
     res.json({ message: "Project deleted" });
@@ -222,6 +277,44 @@ export const streamCahierFile = async (req, res) => {
     res.setHeader(
       "Content-Type",
       project.cahierFileMimeType || "application/octet-stream"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      download
+        ? `attachment; filename*=UTF-8''${encodedName}`
+        : `inline; filename*=UTF-8''${encodedName}`
+    );
+
+    fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/** Téléchargement / consultation du docker-compose de référence */
+export const streamComposeFile = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: "Projet introuvable" });
+    }
+    if (!project.composeFileStoredName) {
+      return res.status(404).json({ message: "Aucun fichier docker-compose pour ce projet" });
+    }
+
+    const filePath = path.join(COMPOSE_DIR, project.composeFileStoredName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "Fichier introuvable sur le serveur" });
+    }
+
+    const download = req.query.download === "1";
+    const encodedName = encodeURIComponent(
+      project.composeFileOriginalName || "docker-compose.yml"
+    );
+
+    res.setHeader(
+      "Content-Type",
+      project.composeFileMimeType || "text/yaml; charset=utf-8"
     );
     res.setHeader(
       "Content-Disposition",

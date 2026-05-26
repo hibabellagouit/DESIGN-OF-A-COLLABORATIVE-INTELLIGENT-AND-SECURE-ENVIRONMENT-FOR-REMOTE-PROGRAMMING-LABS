@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: TP Projets API
+  version: 1.0.0
+  description: API plateforme projets TP (étudiants, enseignants, admin).
+servers:
+  - url: http://localhost:5000
+paths:
+  /api/health:
+    get:
+      summary: Santé (MongoDB, Docker, Ollama)
+      responses:
+        "200":
+          description: Processus actif
+  /api/students/login:
+    post:
+      summary: Connexion étudiant
+  /api/teachers/login:
+    post:
+      summary: Connexion enseignant
+  /api/students/me/grades:
+    get:
+      summary: Détail des notes (étudiant connecté)
+      security: [{ bearerAuth: [] }]
+  /api/teachers/pending:
+    get:
+      summary: Tableau À traiter
+      security: [{ bearerAuth: [] }]
+  /api/teachers/export/grades.csv:
+    get:
+      summary: Export CSV des notes
+      security: [{ bearerAuth: [] }]
+  /api/jobs/sandbox:
+    post:
+      summary: Lancer test Docker en arrière-plan (BullMQ si REDIS_URL)
+      security: [{ bearerAuth: [] }]
+  /api/jobs/ollama:
+    post:
+      summary: Lancer évaluation Ollama en arrière-plan
+      security: [{ bearerAuth: [] }]
+  /api/jobs/info:
+    get:
+      summary: Mode de file (redis | memory)
+      security: [{ bearerAuth: [] }]
+  /api/jobs/{id}:
+    get:
+      summary: Statut d'une tâche
+      security: [{ bearerAuth: [] }]
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

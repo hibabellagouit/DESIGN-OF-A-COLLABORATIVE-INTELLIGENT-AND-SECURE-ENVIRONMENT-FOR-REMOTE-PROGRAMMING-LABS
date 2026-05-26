@@ -1,11 +1,22 @@
 import express from "express";
-import { runSubmissionInSandbox } from "../controllers/sandboxController.js";
+import {
+  runSubmissionInSandbox,
+  stopSubmissionSandboxRun,
+  refreshSubmissionSandboxLinksRun,
+} from "../controllers/sandboxController.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Teacher-only: execute a submission file in a locked-down Docker container (MVP: .py or .js)
+// Teacher-only: exécuter une soumission via docker compose (docker-compose.yml à la racine)
 router.post("/run-submission", requireAuth, requireRole("teacher"), runSubmissionInSandbox);
+router.post("/stop-submission", requireAuth, requireRole("teacher"), stopSubmissionSandboxRun);
+router.post(
+  "/refresh-links",
+  requireAuth,
+  requireRole("teacher"),
+  refreshSubmissionSandboxLinksRun
+);
 
 export default router;
 

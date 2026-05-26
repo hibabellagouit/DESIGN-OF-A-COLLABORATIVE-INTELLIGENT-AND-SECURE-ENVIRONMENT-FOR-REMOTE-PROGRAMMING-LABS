@@ -1,13 +1,15 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { API_BASE } from "../apiBase";
 import { authHeaders } from "../authStorage";
+import { mongoIdString } from "../mongoIdString";
 import { emitToast } from "../toastBus";
 
 const StudentWorkspaceContext = createContext(null);
 
 function readStudentId() {
   try {
-    return JSON.parse(localStorage.getItem("user") || "{}")?.student?._id || "";
+    const raw = JSON.parse(localStorage.getItem("user") || "{}")?.student?._id;
+    return mongoIdString(raw);
   } catch {
     return "";
   }
@@ -16,6 +18,8 @@ function readStudentId() {
 export function StudentWorkspaceProvider({ children }) {
   const [assignments, setAssignments] = useState([]);
   const [selectableProjects, setSelectableProjects] = useState([]);
+  const [team, setTeam] = useState(null);
+  const [noTeam, setNoTeam] = useState(false);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -40,23 +44,42 @@ export function StudentWorkspaceProvider({ children }) {
     setLoading(true);
     setError("");
     try {
-      const [assignmentData, selectionData] = await Promise.all([
-        fetch(`${API_BASE}/api/assignments/student/${studentId}`, {
-          headers: authHeaders(),
-        }).then((res) => {
-          if (!res.ok) throw new Error("Impossible de charger vos projets");
-          return res.json();
-        }),
-        fetch(`${API_BASE}/api/assignments/student/${studentId}/selectable-projects`, {
-          headers: authHeaders(),
-        }).then((res) => {
-          if (!res.ok) throw new Error("Impossible de charger le schéma des niveaux");
-          return res.json();
-        }),
-      ]);
+      const assignmentRes = await fetch(`${API_BASE}/api/assignments/student/${studentId}`, {
+        headers: authHeaders(),
+      });
+      if (!assignmentRes.ok) throw new Error("Impossible de charger vos projets");
+      const assignmentData = await assignmentRes.json();
+
+      const selectionRes = await fetch(
+        `${API_BASE}/api/assignments/student/${studentId}/selectable-projects`,
+        { headers: authHeaders() }
+      );
+      const selectionData = await selectionRes.json().catch(() => ({}));
+      if (!selectionRes.ok) {
+        const msg = selectionData.message || selectionData.error || "Impossible de charger le schéma des niveaux";
+        if (selectionRes.status === 400 && /équipe/i.test(msg)) {
+          setNoTeam(true);
+          setTeam(null);
+          setSelectableProjects([]);
+          setAssignments(assignmentData);
+          try {
+            const lvl = Number(JSON.parse(localStorage.getItem("user") || "{}")?.student?.currentLevel);
+            setCurrentLevel(Number.isFinite(lvl) && lvl >= 1 ? lvl : 1);
+          } catch {
+            setCurrentLevel(1);
+          }
+          setError("");
+          return;
+        }
+        throw new Error(msg);
+      }
+
+      setNoTeam(false);
       setAssignments(assignmentData);
       setSelectableProjects(selectionData.projects || []);
       setCurrentLevel(selectionData.currentLevel || 1);
+      setTeam(selectionData.team || null);
+      setError("");
     } catch (e) {
       setError(e.message || "Erreur");
     } finally {
@@ -88,11 +111,11 @@ export function StudentWorkspaceProvider({ children }) {
         if (!res.ok) throw new Error(data.message || data.error);
         setActionFeedback({
           ok: true,
-          text: "Projet sélectionné. Terminez-le pour débloquer le niveau suivant.",
+          text: "Projet choisi pour votre équipe. Terminez-le pour débloquer le niveau suivant.",
         });
         emitToast({
           title: "Projet choisi",
-          message: "Projet enregistré. Terminez-le pour débloquer le niveau suivant.",
+          message: "Votre équipe travaille sur ce projet. Terminez-le pour débloquer le niveau suivant.",
         });
         await reload();
         setSubmissionFiles([]);
@@ -181,31 +204,59 @@ export function StudentWorkspaceProvider({ children }) {
     ? String(activeAssignment.project._id)
     : "";
 
-  const value = {
-    studentId,
-    assignments,
-    selectableProjects,
-    currentLevel,
-    loading,
-    error,
-    actionFeedback,
-    selecting,
-    uploading,
-    uploadFeedback,
-    submissionFiles,
-    setSubmissionFiles,
-    submissionMode,
-    setSubmissionMode,
-    submissionGithubUrl,
-    setSubmissionGithubUrl,
-    submissionHistoryTick,
-    activeAssignment,
-    activeProjectId,
-    projectsByLevel,
-    chooseProject,
-    submitWork,
-    reload,
-  };
+  const value = useMemo(
+    () => ({
+      studentId,
+      assignments,
+      selectableProjects,
+      team,
+      noTeam,
+      currentLevel,
+      loading,
+      error,
+      actionFeedback,
+      selecting,
+      uploading,
+      uploadFeedback,
+      submissionFiles,
+      setSubmissionFiles,
+      submissionMode,
+      setSubmissionMode,
+      submissionGithubUrl,
+      setSubmissionGithubUrl,
+      submissionHistoryTick,
+      activeAssignment,
+      activeProjectId,
+      projectsByLevel,
+      chooseProject,
+      submitWork,
+      reload,
+    }),
+    [
+      studentId,
+      assignments,
+      selectableProjects,
+      team,
+      noTeam,
+      currentLevel,
+      loading,
+      error,
+      actionFeedback,
+      selecting,
+      uploading,
+      uploadFeedback,
+      submissionFiles,
+      submissionMode,
+      submissionGithubUrl,
+      submissionHistoryTick,
+      activeAssignment,
+      activeProjectId,
+      projectsByLevel,
+      chooseProject,
+      submitWork,
+      reload,
+    ]
+  );
 
   return <StudentWorkspaceContext.Provider value={value}>{children}</StudentWorkspaceContext.Provider>;
 }

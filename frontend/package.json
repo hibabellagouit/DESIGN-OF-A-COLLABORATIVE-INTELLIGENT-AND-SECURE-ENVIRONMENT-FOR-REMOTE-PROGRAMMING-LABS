@@ -8,7 +8,6 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^13.5.0",
-    "d3": "^7.9.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.0",
@@ -17,9 +16,17 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "start:clean": "node -e \"require('fs').rmSync('node_modules/.cache',{recursive:true,force:true})\" && react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "lint": "eslint \"src/**/*.{js,jsx}\" --ignore-pattern src/setupTests.js --max-warnings 20",
+    "audit:report": "npm audit --audit-level=high",
+    "audit:ci": "npm audit --audit-level=critical",
     "eject": "react-scripts eject"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-react-app": "^7.0.1"
   },
   "eslintConfig": {
     "extends": [

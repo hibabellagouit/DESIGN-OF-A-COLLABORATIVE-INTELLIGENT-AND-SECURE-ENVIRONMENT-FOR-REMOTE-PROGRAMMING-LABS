@@ -295,6 +295,50 @@ export const listAuditLogs = async (req, res) => {
   }
 };
 
+export const createTeacher = async (req, res) => {
+  try {
+    const { name, email, password } = req.body || {};
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Nom, e-mail et mot de passe requis." });
+    }
+    if (String(password).length < 6) {
+      return res.status(400).json({ message: "Mot de passe trop court (min. 6 caractères)." });
+    }
+    const em = String(email).toLowerCase().trim();
+    const existing = await Teacher.findOne({ email: em });
+    if (existing) {
+      return res.status(409).json({ message: "Cet e-mail est déjà utilisé." });
+    }
+    const hashed = await bcrypt.hash(password, 10);
+    const teacher = await Teacher.create({
+      name: String(name).trim(),
+      email: em,
+      password: hashed,
+    });
+    await recordAudit(req, {
+      actorId: req.user?.id,
+      actorRole: "admin",
+      action: "teacher_created",
+      targetType: "teacher",
+      targetId: teacher._id.toString(),
+      details: { email: em },
+    });
+    res.status(201).json({
+      message: "Enseignant créé",
+      teacher: { _id: teacher._id, name: teacher.name, email: teacher.email },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ message: "Cet e-mail est déjà utilisé." });
+    }
+    console.error("createTeacher", error);
+    res.status(500).json({
+      message: error.message || "Impossible de créer l’enseignant.",
+      error: error.message,
+    });
+  }
+};
+
 export const createAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
